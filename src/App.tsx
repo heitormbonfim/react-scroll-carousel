@@ -35,6 +35,30 @@ const products: Product[] = [
     description: "This is product four",
     image: "https://picsum.photos/seed/4/250/300",
   },
+  {
+    id: 5,
+    name: "Product Four",
+    description: "This is product four",
+    image: "https://picsum.photos/seed/5/250/300",
+  },
+  {
+    id: 6,
+    name: "Product Four",
+    description: "This is product four",
+    image: "https://picsum.photos/seed/6/250/300",
+  },
+  {
+    id: 7,
+    name: "Product Four",
+    description: "This is product four",
+    image: "https://picsum.photos/seed/7/250/300",
+  },
+  {
+    id: 8,
+    name: "Product Four",
+    description: "This is product four",
+    image: "https://picsum.photos/seed/8/250/300",
+  },
 ];
 
 const App: React.FC = () => {
@@ -46,18 +70,19 @@ const App: React.FC = () => {
       <div className="w-full max-w-4xl overflow-hidden">
         <ProductCarousel
           cellAlign="center"
+          centerOnArrowClick={false}
           groupCells={1}
           adaptiveHeight={true}
           allowDrag={true}
           onSelect={(index, cell) => console.log("Selected cell index:", index, cell)}
         >
           {products.map((product) => (
-            <div key={product.id} className="flex flex-col items-center">
+            <div key={product.id} className="flex flex-col items-center select-none">
               {/* Display the product image from Picsum */}
               <img
                 src={product.image}
                 alt={product.name}
-                className="w-full h-48 object-cover"
+                className="w-full h-48 object-cover no-select"
                 loading="lazy"
               />
               <div className="p-4 text-center">

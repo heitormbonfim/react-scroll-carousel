@@ -7,3 +7,10 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+.no-select {
+  user-select: none !important;
+  -moz-user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-user-drag: none !important;
+}

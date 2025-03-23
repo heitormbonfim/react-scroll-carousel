@@ -1,14 +1,19 @@
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import React, { useRef, useState, useEffect, useCallback, ReactNode, MouseEvent } from "react";
+// Define props for the ProductCarousel component.
 
-// Define the props for our ProductCarousel component.
 interface ProductCarouselProps {
-  children: ReactNode; // The product cards to display.
-  // Determines how a cell is aligned inside the viewport.
-  cellAlign?: "start" | "center" | "end";
-  groupCells?: number; // How many cells to scroll at once (default is 1).
-  adaptiveHeight?: boolean; // If true, the container's height adapts to the current cell.
-  allowDrag?: boolean; // Enable drag-to-scroll functionality.
-  onSelect?: (index: number, cell: HTMLElement | null) => void; // Callback when a cell is selected.
+  children: ReactNode; // Carousel items (e.g. product cards)
+  cellAlign?: "start" | "center" | "end"; // How cells are aligned when snapping (for arrow clicks when centerOnArrowClick is true)
+  groupCells?: number; // How many cells to scroll at once (used with centerOnArrowClick behavior)
+  adaptiveHeight?: boolean; // If true, adjusts container height to match the current cell
+  allowDrag?: boolean; // Enables drag-to-scroll functionality
+  onSelect?: (index: number, cell: HTMLElement | null) => void; // Callback when cell selection changes
+
+  // New boolean options:
+  centerOnArrowClick?: boolean; // If true (default), arrow click centers the card. If false, it scrolls by container width.
+  freeDrag?: boolean; // If true, dragging stops exactly where the user releases (no auto-snap)
+  oneAtATime?: boolean; // If true, only one product is visible at a time; container width equals product width.
 }
 
 const ProductCarousel: React.FC<ProductCarouselProps> = ({
@@ -18,30 +23,33 @@ const ProductCarousel: React.FC<ProductCarouselProps> = ({
   adaptiveHeight = false,
   allowDrag = true,
   onSelect,
+  centerOnArrowClick = true,
+  freeDrag = false,
+  oneAtATime = false,
 }) => {
   // Reference to the carousel container.
   const containerRef = useRef<HTMLDivElement>(null);
-  // State to track the currently selected (centered) cell index.
+  // Track the currently selected cell index.
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
-  // Ref to track whether dragging is active.
+  // Track whether the carousel is currently being dragged.
   const isDraggingRef = useRef<boolean>(false);
-  // Ref to store the initial positions when dragging starts.
+  // Store the initial mouse and scroll positions when dragging starts.
   const dragStartRef = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
-  // Ref to store a timeout ID for debouncing scroll events.
+  // For debouncing the scroll event.
   const scrollTimeoutRef = useRef<number | null>(null);
 
-  // Helper: Retrieve all direct children of the container as HTMLElements.
+  // Helper: Get all the carousel cells (children elements).
   const getCells = (): HTMLElement[] => {
     if (!containerRef.current) return [];
     return Array.from(containerRef.current.children) as HTMLElement[];
   };
 
-  // Calculate the left scroll offset needed to properly align a cell
-  // based on the chosen alignment (start, center, end).
+  // Calculate the scrollLeft needed to align a given cell.
+  // Used when centerOnArrowClick is true.
   const calculateLeftScroll = (cell: HTMLElement): number => {
     const container = containerRef.current;
     if (!container) return 0;
-    let scrollLeft: number = 0;
+    let scrollLeft = 0;
     if (cellAlign === "start") {
       scrollLeft = cell.offsetLeft;
     } else if (cellAlign === "center") {
@@ -49,12 +57,11 @@ const ProductCarousel: React.FC<ProductCarouselProps> = ({
     } else if (cellAlign === "end") {
       scrollLeft = cell.offsetLeft + cell.clientWidth - container.clientWidth;
     }
-    // Ensure we don't scroll out of bounds.
     return Math.min(Math.max(scrollLeft, 0), container.scrollWidth - container.clientWidth);
   };
 
-  // Determine which cell is closest to the current scroll position.
-  // This function is used to auto-snap to the nearest cell when scrolling stops.
+  // Determine the closest cell index to the current scroll position.
+  // This is used to update the selectedIndex when auto-snapping.
   const calculateClosestIndex = (): number => {
     const cells = getCells();
     const container = containerRef.current;
@@ -94,7 +101,7 @@ const ProductCarousel: React.FC<ProductCarouselProps> = ({
     return closestIndex;
   };
 
-  // Update the selected index and trigger the onSelect callback if provided.
+  // Update the selected index and trigger the onSelect callback.
   const updateSelectedIndex = (index: number) => {
     setSelectedIndex(index);
     if (onSelect) {
@@ -103,18 +110,20 @@ const ProductCarousel: React.FC<ProductCarouselProps> = ({
     }
   };
 
-  // Scroll event handler: uses a timeout to detect when scrolling stops,
-  // then snaps to the nearest cell.
+  // Scroll event handler: debounce and then update the selected index.
   const handleScroll = useCallback(() => {
     if (scrollTimeoutRef.current) {
       window.clearTimeout(scrollTimeoutRef.current);
     }
     scrollTimeoutRef.current = window.setTimeout(() => {
-      updateSelectedIndex(calculateClosestIndex());
+      // If freeDrag is false, auto-snap to the nearest cell.
+      if (!freeDrag) {
+        updateSelectedIndex(calculateClosestIndex());
+      }
     }, 75);
-  }, [cellAlign]);
+  }, [cellAlign, freeDrag]);
 
-  // Mouse down event: start tracking drag.
+  // Mouse down: start tracking drag.
   const handleMouseDown = (e: MouseEvent<HTMLDivElement>) => {
     if (!allowDrag) return;
     isDraggingRef.current = true;
@@ -125,12 +134,12 @@ const ProductCarousel: React.FC<ProductCarouselProps> = ({
         scrollLeft: containerRef.current.scrollLeft,
         scrollTop: containerRef.current.scrollTop,
       };
-      // Temporarily disable snap while dragging.
+      // Disable snapping while dragging.
       containerRef.current.style.scrollSnapType = "none";
     }
   };
 
-  // Mouse move event: update the scroll position as the user drags.
+  // Mouse move: update scroll based on mouse movement.
   const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
     if (!isDraggingRef.current || !containerRef.current) return;
     e.preventDefault();
@@ -138,52 +147,54 @@ const ProductCarousel: React.FC<ProductCarouselProps> = ({
     containerRef.current.scrollLeft = dragStartRef.current.scrollLeft - dx;
   };
 
-  // Mouse up or leave event: end dragging and snap to the nearest cell.
+  // Mouse up: stop dragging.
+  // If freeDrag is false, auto-snap; otherwise, leave the carousel where it is.
   const handleMouseUp = (e: MouseEvent<HTMLDivElement>) => {
     if (!allowDrag || !containerRef.current) return;
     isDraggingRef.current = false;
-    // Re-enable snapping.
     containerRef.current.style.scrollSnapType = "";
-    // If dragging occurred, smooth-scroll to the nearest cell.
-    if (Math.abs(e.pageX - dragStartRef.current.x) > 0) {
+    if (!freeDrag && Math.abs(e.pageX - dragStartRef.current.x) > 0) {
       const cells = getCells();
-      const cell = cells[selectedIndex];
+      const closestIndex = calculateClosestIndex();
+      const cell = cells[closestIndex];
       if (cell) {
         containerRef.current.scrollTo({
           left: calculateLeftScroll(cell),
           behavior: "smooth",
         });
       }
+      updateSelectedIndex(closestIndex);
     }
   };
 
-  // Handler for the left arrow: moves to the previous cell.
-  const handlePrevious = () => {
-    const cells = getCells();
-    const newIndex = Math.max(selectedIndex - groupCells, 0);
-    updateSelectedIndex(newIndex);
-    if (containerRef.current && cells[newIndex]) {
-      containerRef.current.scrollTo({
-        left: calculateLeftScroll(cells[newIndex]),
-        behavior: "smooth",
-      });
-    }
-  };
+  // Global mouseup handler ensures dragging stops even if mouse leaves the container.
+  // Global mouseup handler ensures dragging stops even if mouse is released outside the container.
+  useEffect(() => {
+    const handleDocumentMouseUp = () => {
+      if (isDraggingRef.current && containerRef.current) {
+        isDraggingRef.current = false;
+        containerRef.current.style.scrollSnapType = "";
+        if (!freeDrag) {
+          const cells = getCells();
+          const closestIndex = calculateClosestIndex();
+          const cell = cells[closestIndex];
+          if (cell) {
+            containerRef.current.scrollTo({
+              left: calculateLeftScroll(cell),
+              behavior: "smooth",
+            });
+          }
+          updateSelectedIndex(closestIndex);
+        }
+      }
+    };
+    document.addEventListener("mouseup", handleDocumentMouseUp);
+    return () => {
+      document.removeEventListener("mouseup", handleDocumentMouseUp);
+    };
+  }, [freeDrag]);
 
-  // Handler for the right arrow: moves to the next cell.
-  const handleNext = () => {
-    const cells = getCells();
-    const newIndex = Math.min(selectedIndex + groupCells, cells.length - 1);
-    updateSelectedIndex(newIndex);
-    if (containerRef.current && cells[newIndex]) {
-      containerRef.current.scrollTo({
-        left: calculateLeftScroll(cells[newIndex]),
-        behavior: "smooth",
-      });
-    }
-  };
-
-  // If adaptiveHeight is enabled, adjust the container's max height to the current cell.
+  // Adjust container height to match the current cell if adaptiveHeight is enabled.
   useEffect(() => {
     if (adaptiveHeight && containerRef.current) {
       const cells = getCells();
@@ -194,7 +205,7 @@ const ProductCarousel: React.FC<ProductCarouselProps> = ({
     }
   }, [adaptiveHeight, selectedIndex]);
 
-  // Attach the scroll event listener when the component mounts.
+  // Attach the scroll event listener.
   useEffect(() => {
     const container = containerRef.current;
     if (container) {
@@ -205,45 +216,96 @@ const ProductCarousel: React.FC<ProductCarouselProps> = ({
     }
   }, [handleScroll]);
 
+  // Handler for left arrow click.
+  const handlePrevious = () => {
+    const cells = getCells();
+    let newIndex: number;
+    if (centerOnArrowClick) {
+      // Move back by groupCells and center the target cell.
+      newIndex = Math.max(selectedIndex - groupCells, 0);
+      updateSelectedIndex(newIndex);
+      if (containerRef.current && cells[newIndex]) {
+        containerRef.current.scrollTo({
+          left: calculateLeftScroll(cells[newIndex]),
+          behavior: "smooth",
+        });
+      }
+    } else {
+      // Scroll left by the container width (100%).
+      if (containerRef.current) {
+        containerRef.current.scrollBy({
+          left: -containerRef.current.clientWidth,
+          behavior: "smooth",
+        });
+        // Let the scroll event update selectedIndex based on nearest cell.
+      }
+    }
+  };
+
+  // Handler for right arrow click.
+  const handleNext = () => {
+    const cells = getCells();
+    let newIndex: number;
+    if (centerOnArrowClick) {
+      // Move forward by groupCells and center the target cell.
+      newIndex = Math.min(selectedIndex + groupCells, cells.length - 1);
+      updateSelectedIndex(newIndex);
+      if (containerRef.current && cells[newIndex]) {
+        containerRef.current.scrollTo({
+          left: calculateLeftScroll(cells[newIndex]),
+          behavior: "smooth",
+        });
+      }
+    } else {
+      // Scroll right by the container width (100%).
+      if (containerRef.current) {
+        containerRef.current.scrollBy({
+          left: containerRef.current.clientWidth,
+          behavior: "smooth",
+        });
+      }
+    }
+  };
+
+  // Determine container and cell class names based on oneAtATime option.
+  // If oneAtATime is true, the container width is fixed to the product width (here 250px).
+  const containerClasses = oneAtATime
+    ? "w-64 overflow-hidden" // Fixed width matching product cell
+    : "w-full overflow-x-auto no-scrollbar";
+  const cellClasses = oneAtATime
+    ? "flex-shrink-0 w-full min-h-[300px] scroll-snap-center bg-white rounded-lg shadow-lg overflow-hidden"
+    : "flex-shrink-0 w-64 min-h-[300px] scroll-snap-center bg-white rounded-lg shadow-lg overflow-hidden";
+
   return (
-    // The outer relative container prevents the carousel from overflowing the page.
+    // Outer relative container to confine carousel and position arrows.
     <div className="relative w-full max-w-4xl overflow-hidden">
-      {/* 
-        Carousel container styled with Tailwind.
-        - "overflow-x-auto" enables horizontal scrolling.
-        - "no-scrollbar" (defined globally) hides the scrollbar.
-        - "flex gap-4 p-4" arranges the cells in a row with spacing.
-      */}
       <div
         ref={containerRef}
-        className="w-full overflow-x-auto no-scrollbar flex gap-4 p-4"
+        className={`${containerClasses} flex gap-4 p-4`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
         {React.Children.map(children, (child) => (
-          // Each cell is a fixed-width, non-shrinking div with snapping enabled.
-          <div className="flex-shrink-0 w-64 min-h-[300px] scroll-snap-center bg-white rounded-lg shadow-lg overflow-hidden">
-            {child}
-          </div>
+          <div className={cellClasses}>{child}</div>
         ))}
       </div>
 
-      {/* Left arrow button: positioned absolutely on the left center. */}
+      {/* Left arrow button */}
       <button
         onClick={handlePrevious}
-        className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 shadow-lg z-10"
+        className="absolute left-2 top-1/2 transform -translate-y-1/2 backdrop-blur-sm text-white rounded-full p-3 shadow-lg z-10"
       >
-        <span className="text-xl font-bold">&lsaquo;</span>
+        <ArrowLeft />
       </button>
 
-      {/* Right arrow button: positioned absolutely on the right center. */}
+      {/* Right arrow button */}
       <button
         onClick={handleNext}
-        className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 shadow-lg z-10"
+        className="absolute right-2 top-1/2 transform -translate-y-1/2 backdrop-blur-sm text-white rounded-full p-3 shadow-lg z-10"
       >
-        <span className="text-xl font-bold">&rsaquo;</span>
+        <ArrowRight />
       </button>
     </div>
   );
