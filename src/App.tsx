@@ -72,7 +72,7 @@ const App: React.FC = () => {
           cellAlign="center"
           centerOnArrowClick={false}
           groupCells={1}
-          adaptiveHeight={true}
+          adaptiveHeight={false}
           allowDrag={true}
           onSelect={(index, cell) => console.log("Selected cell index:", index, cell)}
         >
