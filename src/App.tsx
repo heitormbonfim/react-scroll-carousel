@@ -68,14 +68,7 @@ const App: React.FC = () => {
       <h1 className="text-2xl font-bold mb-6 text-center">Our Beautiful Product Carousel</h1>
       {/* Wrap the carousel in a container to prevent horizontal overflow */}
       <div className="w-full max-w-4xl overflow-hidden">
-        <ProductCarousel
-          cellAlign="center"
-          centerOnArrowClick={false}
-          groupCells={1}
-          adaptiveHeight={false}
-          allowDrag={true}
-          onSelect={(index, cell) => console.log("Selected cell index:", index, cell)}
-        >
+        <ProductCarousel allowDrag>
           {products.map((product) => (
             <div key={product.id} className="flex flex-col items-center select-none">
               {/* Display the product image from Picsum */}
